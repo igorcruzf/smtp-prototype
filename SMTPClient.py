@@ -12,18 +12,18 @@ clientSocket.connect((serverName,serverPort))
 response = clientSocket.recv(1024)
 print('S:', response.decode('UTF-8'))
 
-sentence = input('Send a message: ').encode('UTF-8')
+sentence = input('C: ').encode('UTF-8')
 # Envio de bytes
 clientSocket.send(sentence)
 
 # Recepcao
 response = clientSocket.recv(1024)
-print('From Server:', response.decode('UTF-8'))
+print('S:', response.decode('UTF-8'))
 
 estado = 0
 
 while (True):
-  sentence = input('Send a message: ').encode('UTF-8')
+  sentence = input('C: ').encode('UTF-8')
 
   # Envio de bytes
   clientSocket.send(sentence)
@@ -31,12 +31,17 @@ while (True):
   if (estado == 0):
     # Recepcao
     response = clientSocket.recv(1024)
-    print('From Server:', response.decode('UTF-8'))
+    print('S:', response.decode('UTF-8'))
 
-  if (sentence == 'DATA'.encode('UTF-8')):
-    print('Mudando estado por causa da DATA') 
-    estado = 1
-  elif (sentence == '.'.encode('UTF-8')): estado = 0
+    if (sentence == 'DATA'.encode('UTF-8') and response.decode('UTF-8')[0:3] == '354'): 
+      estado = 1
+    if (sentence == 'QUIT'.encode('UTF-8')):
+      break
+  elif (estado == 1):
+    if (sentence == '.'.encode('UTF-8')):
+      estado = 0
+      response = clientSocket.recv(1024)
+      print('S:', response.decode('UTF-8'))
 
 
 

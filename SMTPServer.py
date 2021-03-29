@@ -1,33 +1,10 @@
 from socket import *
 import os
 import sys
-from datetime import datetime
-
-def popula_caixa():
-  caixas = 'usuarios.txt'
-
-  if os.path.isfile(caixas) == False:
-    print('Arquivo Inexistente, encerrando aplicação')
-    sys.exit()
-    #Encerrar aplicação
-
-  arquivo = open(caixas, 'r+')
-
-  usuarios = arquivo.readlines()
-
-  for i in range(len(usuarios)):
-      if usuarios[i][-1] != '\n':
-          usuario = (usuarios[i] + ".txt")
-      else:
-          usuario = (usuarios[i][0:-1] + ".txt")
-      caixa = open('caixas/'+ usuario, 'a+')
-      caixa.close()
-
-
-popula_caixa()
+from helpers import *
 
 # Numero de porta na qual o servidor estara esperando conexoes.
-serverPort = 12000
+serverPort = 25
 
 # Criar o socket. AF_INET e SOCK_STREAM indicam TCP.
 serverSocket = socket(AF_INET, SOCK_STREAM)
@@ -36,132 +13,141 @@ serverSocket = socket(AF_INET, SOCK_STREAM)
 # que desejamos aceitar conexoes em qualquer interface de rede desse host
 serverSocket.bind(('', serverPort))
 
+
 # Habilitar socket para aceitar conexoes. O argumento 1 indica que ate
 # uma conexao sera deixada em espera, caso recebamos multiplas conexoes
 # simultaneas
 serverSocket.listen(1)
 
-print('O servidor esta pronto para receber conexoes')
+#Comandos implentados
+
+# Após receber QUIT
+# 0 - Aguardando HELO
+
+# Após receber HELO, RSET, ou fechar a DATA
+# 1 - Aguardando MAIL FROM, RSET, VRFY, NOOP, QUIT
+
+# Após receber o MAIL FROM
+# 2 - Aguardando RCPT TO, DATA, MAIL FROM, RSET, VRFY, NOOP, QUIT
+
+# Após receber DATA
+# 3 - Aguardando o .
 
 
 def main():
-  # Loop infinito: servidor eh capaz de tratar multiplas conexoes
+  popula_caixa()
+
+  # Loop da conexão
   while 1:
 
-    try:
-      # Aguardar nova conexao
-      print('Aguardando conexao...')
-      connectionSocket, addr = serverSocket.accept()
-      print('Nova conexao recebida!')
+    # Estado do servidor
+    SERVER_STATE = 0
 
-      # Recepcao de dados
-      if(not(helo(connectionSocket) and mail_from(connectionSocket))): 
-        print('Fechando socket...')
-        connectionSocket.close()
-      else:
-        userList = rcpt_to(connectionSocket)
-        data = receive_data(connectionSocket, userList)
-        write_data(userList, data)
-      #inserir nos arquivos
+    # Aguardar nova conexão
+    connectionSocket, addr = serverSocket.accept()
+    print('Nova conexão recebida!')
+
+    connectionSocket.send("220 redes.uff".encode('UTF-8'))
+
+    userList =[]
+
+    sender = ''
+
+    data = ''
       
-    except Exception as e:
-      print(e)
-      connectionSocket.close()  
+    # Loop dos estados
+    while 1:
 
+      # Mensagem do usuário
+      sentence = connectionSocket.recv(1024).decode('UTF-8')
 
-def helo(connectionSocket):
-  print('Aguardando HELO...')
-  sentence = connectionSocket.recv(1024).decode('UTF-8').split()
+      # Estado 0 (Aguardando HELO)
+      if (SERVER_STATE == 0):
+        
+        comando_digitado = verificar_comando(connectionSocket, sentence, ['HELO', 'QUIT'])
 
-  while('HELO' != sentence[0] or len(sentence) == 1):
+        if (comando_digitado):
+          if (comando_digitado == COMANDOS_ENUM["HELO"] and helo(connectionSocket, sentence)):
+            SERVER_STATE = 1
+          
+          elif (comando_digitado == COMANDOS_ENUM["QUIT"]):
+            quit(connectionSocket)
+            break
 
-    if('QUIT' == sentence[0]):
-      return False
-
-    connectionSocket.send("500 Syntax error, command unrecognized".encode('UTF-8'))
-    print('Aguardando HELO...')
-    sentence = connectionSocket.recv(1024).decode('UTF-8').split()
-    print('Dado recebido do cliente: ', sentence)
-
-  print('Helo recebido')
-  message = "250 Hello " + sentence[1] + ", pleased to meet you"
-  connectionSocket.send(message.encode('UTF-8'))
-  return True
-
-def mail_from(connectionSocket):
-  print('Aguardando MAIL FROM')
-  sentence = connectionSocket.recv(1024).decode('UTF-8').split(':')
+      # Estado 1 (Aguardando MAIL FROM/ RSET, VRFY, NOOP, QUIT)
+      elif (SERVER_STATE == 1):
       
-  while('MAIL FROM' != sentence[0] or len(sentence) == 1):
-    
-    if('QUIT' == sentence[0]):
-      return False
+        comando_digitado = verificar_comando(connectionSocket, sentence, ['MAIL FROM', 'NOOP', 'VRFY', 'RSET', 'QUIT'])
 
-    connectionSocket.send("500 Syntax error, command unrecognized".encode('UTF-8'))
-    print('Aguardando MAIL FROM...')
-    sentence = connectionSocket.recv(1024).decode('UTF-8').split()
-  
-  print('Mail from recebido' + sentence[1])
-  message = '250 ' + sentence[1] + '... Sender ok'
-  connectionSocket.send(message.encode('UTF-8'))
+        if (comando_digitado):
+          if (comando_digitado == COMANDOS_ENUM["MAIL FROM"] and mail_from(connectionSocket, sentence)):
+            sender = sentence = sentence.replace(' ', '').split(':')[1]
+            SERVER_STATE = 2
+          
+          elif (comando_digitado == COMANDOS_ENUM["NOOP"]):
+            noop(connectionSocket)
 
-  return True
+          elif (comando_digitado == COMANDOS_ENUM["VRFY"]):
+            vrfy(connectionSocket, sentence)
 
+          elif (comando_digitado == COMANDOS_ENUM["RSET"]):
+            connectionSocket.send("250 OK".encode('UTF-8'))
+            SERVER_STATE = 0
 
-def rcpt_to(connectionSocket):
+          elif (comando_digitado == COMANDOS_ENUM["QUIT"]):
+            quit(connectionSocket)
+            break
 
-  userList = []
+      # Estado 2 (Aguardando DATA / RCPT TO, RSET, VRFY, NOOP, QUIT, MAIL FROM)    
+      elif (SERVER_STATE == 2):
+        comando_digitado = verificar_comando(connectionSocket, sentence, 
+        ['DATA', 'RCPT TO', 'RSET', 'VRFY', 'NOOP', 'QUIT', 'MAIL FROM'])
 
-  print('Aguardando RCPT TO')
-  sentence = connectionSocket.recv(1024).decode('UTF-8').split(':')
+        if (comando_digitado):
+          if (comando_digitado == COMANDOS_ENUM["RCPT TO"] and rcpt_to(connectionSocket, sentence)):
+            #Adiciona um usuário na lista de remetentes
+            userList.append(sentence.replace(' ', '').split(':')[1])
 
-  while('DATA' != sentence[0]):
+          elif (comando_digitado == COMANDOS_ENUM["MAIL FROM"] and mail_from(connectionSocket, sentence)):
+            sender = sentence = sentence.replace(' ', '').split(':')[1]
+            #Apaga a lista antiga de destinatarios
+            userList.clear() 
+            SERVER_STATE = 2
 
-    while(('RCPT TO' != sentence[0] or len(sentence) == 1) and 'DATA' != sentence[0]):
+          
+          elif (comando_digitado == COMANDOS_ENUM["RSET"]):
+            print('Executando RSET')
+            connectionSocket.send("250 OK".encode('UTF-8'))
+            print('Mantendo estado 0')
+            #Apaga remetente e destinatários e volta pro início
+            sender = ''
+            userList.clear()
+            SERVER_STATE = 0
 
-      if('QUIT' == sentence[0]):
-        return []
+          elif (comando_digitado == COMANDOS_ENUM["VRFY"]):
+            vrfy(connectionSocket, sentence)
 
-      connectionSocket.send("500 Syntax error, command unrecognized".encode('UTF-8'))
-      print('Aguardando RCPT TO...')
-      sentence = connectionSocket.recv(1024).decode('UTF-8').split(':')
+          elif (comando_digitado == COMANDOS_ENUM["NOOP"]):
+            noop(connectionSocket)
 
-    print('RCPT TO recebido' + sentence[1])
-    user = sentence[1].split('@')[0]
+          elif (comando_digitado == COMANDOS_ENUM["QUIT"]):
+            quit(connectionSocket)
+            break
 
-    if(os.path.isfile('caixas/' + user + '.txt')):
-      print('Encontrou o user ' + sentence[1] + 'User:' + user)
-      message = '250 ' + sentence[1] + '... Recipient ok'
-      connectionSocket.send(message.encode('UTF-8'))
-      userList.append(user)
-    else:
-      print('Nao encontrou o user ' + sentence[1] + ' User: ' + user)
-      connectionSocket.send("550 Address unknown".encode('UTF-8'))
+          elif (comando_digitado == COMANDOS_ENUM["DATA"]):
+            if (acpt_data(connectionSocket, sentence, userList)):
+              SERVER_STATE = 3        
 
-    print('Aguardando RCPT TO')
-    sentence = connectionSocket.recv(1024).decode('UTF-8').split(':')
-  return userList
+      # Estado 3 (Aguardando o .)
+      elif (SERVER_STATE == 3):
+        if (sentence != '.'):
+          data += sentence
+        else:
+          write_data(sender, userList, data)
+          connectionSocket.send('250 Message accepted for delivery'.encode('UTF-8'))
+          userList.clear()
+          sender=''
+          SERVER_STATE = 0
 
-def receive_data(connectionSocket, userList):
-  data = ''
-  if(len(userList) != 0):
-    print('Pegando dados para enviar...')
-    connectionSocket.send('354 Enter mail, end with ".". on a line by itself'.encode('UTF-8'))
-    sentence = connectionSocket.recv(1024)
-    while('.' != sentence.decode('UTF-8')):
-      print('dado recebido: ' + sentence.decode('UTF-8'))
-      data += sentence.decode('UTF-8')
-      sentence = connectionSocket.recv(1024)
-    connectionSocket.send('250 Message accepted for delivery'.encode('UTF-8'))
-  return data
-
-def write_data(userlist, data):
-    horario = datetime.now().strftime('%H:%M - %d/%m/%Y')
-    for usuario in range(len(userlist)):
-        caixa = open('caixas/'+ userlist[usuario] + '.txt', 'a+')
-        #caixa.write('From:' + remetente + '\n')
-        caixa.write(horario + '\n')
-        caixa.write(data +'.' + '\n\n')
-        caixa.close()
 
 main()
