@@ -12,36 +12,40 @@ clientSocket.connect((serverName,serverPort))
 response = clientSocket.recv(1024)
 print('S:', response.decode('UTF-8'))
 
-sentence = input('C: ').encode('UTF-8')
+sentence = input('C: ')
 # Envio de bytes
-clientSocket.send(sentence)
+clientSocket.send(sentence.encode('UTF-8'))
 
 # Recepcao
-response = clientSocket.recv(1024)
-print('S:', response.decode('UTF-8'))
+if (sentence != ''): 
+  response = clientSocket.recv(1024)
+  print('S:', response.decode('UTF-8'))
 
 # Estado 0 - Cliente espera mensagem do servidor
 # Estado 1 - Cliente não espera mensagem do servidor
 estado = 0
 
 while (True):
-  sentence = input('C: ').encode('UTF-8')
+  if (estado == 0 and sentence.replace(' ', '') == 'QUIT'):
+    break
+
+  sentence = input('C: ')
 
   # Envio de bytes
-  clientSocket.send(sentence)
+  if (estado == 1 and sentence == ''): clientSocket.send('\n'.encode('UTF-8'))     
+  else: clientSocket.send(sentence.encode('UTF-8'))
 
   if (estado == 0):
     # Recepcao
-    response = clientSocket.recv(1024)
-    print('S:', response.decode('UTF-8'))
+    if (sentence != ''): 
+      response = clientSocket.recv(1024)
+      print('S:', response.decode('UTF-8'))
 
-    if (sentence == 'DATA'.encode('UTF-8') and response.decode('UTF-8')[0:3] == '354'): 
+    if (sentence == 'DATA' and response.decode('UTF-8')[0:3] == '354'): 
       estado = 1
-    if (sentence == 'QUIT'.encode('UTF-8')):
-      break
 
   elif (estado == 1):
-    if (sentence == '.'.encode('UTF-8')):
+    if (sentence == '.'):
       estado = 0
       response = clientSocket.recv(1024)
       print('S:', response.decode('UTF-8'))

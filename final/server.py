@@ -43,12 +43,17 @@ def main():
       # Estado 0 (Aguardando HELO)
       if (SERVER_STATE == 0):
         
-        comando_digitado = verificar_comando(connectionSocket, sentence, ['HELO'])
+        comando_digitado = verificar_comando(connectionSocket, sentence, ['HELO', 'QUIT'])
 
         if (comando_digitado):
           if (comando_digitado == COMANDOS_ENUM["HELO"] and helo(connectionSocket, sentence)):
             print('HELLO recebido, aguardando por MAIL FROM ou QUIT.')
             SERVER_STATE = 1
+
+          elif (comando_digitado == COMANDOS_ENUM["QUIT"]):
+            print('Encerrando conexão atual.')
+            quit(connectionSocket)
+            break
 
       # Estado 1 (aguardando MAIL FROM, QUIT)
       elif (SERVER_STATE == 1):
@@ -97,11 +102,11 @@ def main():
       # Estado 3 (aguardando mensagens do data e o '.')
       elif (SERVER_STATE == 3):
         if (sentence == '.'): 
+          message += '\n.\n'
           connectionSocket.send('250 Message accepted for delivery'.encode('UTF-8'))
           print('Mensagem enviada, esperando novo MAIL FROM ou QUIT.')
           write_data(rcpt, message)
           SERVER_STATE = 1
-
         else: message += (sentence + '\n')
 
 

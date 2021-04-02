@@ -56,7 +56,18 @@ def verificar_comando(connectionSocket, sentence, comandos):
     if (comandos[i] == comando): 
       return COMANDOS_ENUM[comando]
 
-  connectionSocket.send("500 Syntax error, command unrecognized".encode('UTF-8'))
+  comandoExistente = False
+  print('comando atual:', comando)
+  for key in COMANDOS_ENUM:
+    if (comando == key):
+      comandoExistente = True
+      break
+
+  if (comandoExistente): 
+    connectionSocket.send("503 Bad sequence error, command used in the wrong order".encode('UTF-8'))
+  else:
+    connectionSocket.send("500 Syntax error, command unrecognized".encode('UTF-8'))
+
   return False
 
 
@@ -67,25 +78,8 @@ def helo(connectionSocket, sentence):
     return True
 
   except Exception as e:
-    connectionSocket.send("500 Syntax error, command unrecognized".encode('UTF-8'))
+    connectionSocket.send("501 Syntax error, invalid parameter".encode('UTF-8'))
     return False
-
-
-def noop(connectionSocket):
-  connectionSocket.send('250 OK'.encode('UTF-8'))
-
-
-def vrfy(connectionSocket, sentence):
-  try: 
-    user = sentence.split()[1]
-    if(os.path.isfile(user + '.txt')):
-      message = '250 ' + user+ '@redes.uff'
-      connectionSocket.send(message.encode('UTF-8'))
-    else:
-      connectionSocket.send("550 Address unknown".encode('UTF-8'))
-
-  except Exception as e: 
-    connectionSocket.send("500 Syntax error, command unrecognized".encode('UTF-8'))
 
 
 def quit(connectionSocket):
@@ -106,7 +100,7 @@ def mail_from(connectionSocket, sentence):
     return True
 
   except Exception as e:
-    connectionSocket.send("500 Syntax error, command unrecognized".encode('UTF-8'))
+    connectionSocket.send("501 Syntax error, invalid parameter".encode('UTF-8'))
     return False
 
 def rcpt_to(connectionSocket, sentence, rcpt):
@@ -139,15 +133,15 @@ def rcpt_to(connectionSocket, sentence, rcpt):
       return False
 
   except Exception as e:
-    connectionSocket.send("500 Syntax error, command unrecognized".encode('UTF-8'))
+    connectionSocket.send("501 Syntax error, invalid parameter".encode('UTF-8'))
     return False
 
 def data(connectionSocket, rcpt):
   if (len(rcpt) < 1):
     print('DATA recebido sem destinatários definidos.')
-    connectionSocket.send("500 Syntax error, command unrecognized".encode('UTF-8'))
+    connectionSocket.send("503 Bad sequence error, command used in the wrong order".encode('UTF-8'))
     return False
 
   print('DATA recebido, aguardando texto da mensagem e o "." final')
-  connectionSocket.send('354 Enter mail, end with ".". on a line by itself'.encode('UTF-8'))
+  connectionSocket.send('354 Enter mail, end with "." on a line by itself'.encode('UTF-8'))
   return True
