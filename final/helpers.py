@@ -96,7 +96,11 @@ def quit(connectionSocket):
 def mail_from(connectionSocket, sentence):
   try: 
     sentence = sentence.replace(' ', '').split(':')[1]
-    if (len(sentence) < 1): raise Exception()
+
+    if ((not ('@' in sentence)) or (len(sentence) < 1) or (('<' != sentence[0]) or ('>' != sentence[-1]))): raise Exception()
+
+    sentence = sentence.replace('<', '').replace('>', '')
+
     message = '250 ' + sentence + '... Sender ok'
     connectionSocket.send(message.encode('UTF-8'))
     return True
@@ -109,16 +113,24 @@ def rcpt_to(connectionSocket, sentence, rcpt):
   try:
     sentence = sentence.replace(' ', '').split(':')[1]
 
-    if (len(sentence) < 1): raise Exception()
+    if ((not ('@' in sentence)) or (len(sentence) < 1) or (('<' != sentence[0]) or ('>' != sentence[-1]))): raise Exception()
+
+    sentence = sentence.replace('<', '').replace('>', '')
+    email = sentence.split('@')
+    # email[0] = nome / email[1] = dominio
+
+    if (email[1] != 'redes.uff'): 
+      connectionSocket.send("550 Address unknown".encode('UTF-8'))
+      return False
 
     # Checando se o usuário existe (verifica existência da caixa de entrada)
-    if(os.path.isfile(sentence + '.txt')):
-      if (sentence in rcpt):
+    if(os.path.isfile(email[0] + '.txt')):
+      if (email[0] in rcpt):
         print('E-mail já presente na lista de destinatários.')
       else: 
-        rcpt.append(sentence)
+        rcpt.append(email[0])
 
-      message = '250 ' + sentence + '... Recipient ok'
+      message = '250 ' + email[0] + '@redes.uff' + '... Recipient ok'
       connectionSocket.send(message.encode('UTF-8'))
       return rcpt
 
