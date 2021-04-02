@@ -27,12 +27,13 @@ def popula_caixa():
   usuarios = arquivo.readlines()
 
   for i in range(len(usuarios)):
-      if usuarios[i][-1] != '\n':
-          usuario = (usuarios[i] + ".txt")
-      else:
-          usuario = (usuarios[i][0:-1] + ".txt")
-      caixa = open(usuario, 'a+')
-      caixa.close()
+    usuarios[i] = usuarios[i].replace('<', '').replace('>', '')
+    if usuarios[i][-1] != '\n':
+        usuario = (usuarios[i] + ".txt")
+    else:
+        usuario = (usuarios[i][0:-1] + ".txt")
+    caixa = open(usuario, 'a+')
+    caixa.close()
 
 # Escreve nas caixas de mensagem os emails enviados
 def write_data(userList, data):
