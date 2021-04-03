@@ -1,7 +1,7 @@
 from socket import *
 
 serverName = 'localhost'
-serverPort = 26
+serverPort = 25
 
 # Criacao do socket
 clientSocket = socket(AF_INET, SOCK_STREAM)

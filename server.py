@@ -5,7 +5,7 @@ from datetime import datetime
 from helpers import *
 
 # Numero de porta na qual o servidor estara esperando conexoes.
-serverPort = 26
+serverPort = 25
 
 # Criar o socket. AF_INET e SOCK_STREAM indicam TCP.
 serverSocket = socket(AF_INET, SOCK_STREAM)
