@@ -1,20 +1,22 @@
 import os
 import sys
-from datetime import datetime
+import re
 
 COMANDOS_ENUM = {
   "HELO": 1,
   "MAIL FROM": 2,
-  "RCPT TO": 3,
-  "DATA": 4,
-  "QUIT": 5
+  "DATA": 3,
+  "QUIT": 4,
+  "RCPT TO": 5
 }
+
+regex = '^(\w|\.|\_|\-)+[@](\w|\_|\-|\.)+[.]\w{2,3}$'
 
 # Abre o arquivo inicial e cria as caixas de mensagem
 def popula_caixa():
   try: 
     nomeCaixa = sys.argv[1]
-  except Exception as e:
+  except:
     print('Atenção: Você deve inserir o nome do arquivo de usuários como parâmetro na linha de comando.')
     sys.exit()
 
@@ -37,47 +39,37 @@ def popula_caixa():
 
 # Escreve nas caixas de mensagem os emails enviados
 def write_data(userList, data):
-  horario = datetime.now().strftime('%H:%M - %d/%m/%Y')
   for user in range(len(userList)):
     caixa = open(userList[user] + '.txt', 'a+')
     caixa.write(data + '\n\n')
     caixa.close()
 
 # Checa se o comando digitado é um dos comandos aceitos no atual estado da aplicação
-def verificar_comando(connectionSocket, sentence, comandos):
+def verificar_comando(connectionSocket, sentence, comandos, serverState):
   if (':' in sentence):
     comando = sentence.split(':')[0]
   elif (' ' in sentence):
     comando = sentence.split()[0]
   else: comando = sentence
 
+  if(comando in comandos):
+    return COMANDOS_ENUM[comando]
 
-  for i in range(len(comandos)):
-    if (comandos[i] == comando): 
-      return COMANDOS_ENUM[comando]
-
-  comandoExistente = False
-  print('comando atual:', comando)
-  for key in COMANDOS_ENUM:
-    if (comando == key):
-      comandoExistente = True
-      break
-
-  if (comandoExistente): 
+  if(comando in COMANDOS_ENUM):
     connectionSocket.send("503 Bad sequence error, command used in the wrong order".encode('UTF-8'))
   else:
     connectionSocket.send("500 Syntax error, command unrecognized".encode('UTF-8'))
 
-  return False
+  return serverState
 
 
 def helo(connectionSocket, sentence):
   try: 
     message = "250 Hello " + sentence.split()[1] + ", pleased to meet you"
     connectionSocket.send(message.encode('UTF-8'))
-    return True
-
-  except Exception as e:
+    print('HELO recebido, aguardando por MAIL FROM ou QUIT.')
+    return True  
+  except:
     connectionSocket.send("501 Syntax error, invalid parameter".encode('UTF-8'))
     return False
 
@@ -88,55 +80,62 @@ def quit(connectionSocket):
 
 
 def mail_from(connectionSocket, sentence):
-  try: 
-    sentence = sentence.replace(' ', '').split(':')[1]
 
-    if ((not ('@' in sentence)) or (len(sentence) < 1) or (('<' != sentence[0]) or ('>' != sentence[-1]))): raise Exception()
+  sentence = sentence.replace('MAIL FROM: ', '', 1)
 
-    sentence = sentence.replace('<', '').replace('>', '')
-
-    message = '250 ' + sentence + '... Sender ok'
-    connectionSocket.send(message.encode('UTF-8'))
-    return True
-
-  except Exception as e:
+  if (('<' != sentence[0]) or ('>' != sentence[-1])):
     connectionSocket.send("501 Syntax error, invalid parameter".encode('UTF-8'))
     return False
+
+  sentence = sentence.replace('<', '', 1).replace('>', '', 1)
+
+  if(not re.search(regex, sentence)):
+    connectionSocket.send("501 Syntax error, invalid parameter".encode('UTF-8'))
+    return False
+
+  message = '250 ' + sentence + '... Sender ok'
+  connectionSocket.send(message.encode('UTF-8'))
+  return True
+
+
 
 def rcpt_to(connectionSocket, sentence, rcpt):
-  try:
-    sentence = sentence.replace(' ', '').split(':')[1]
 
-    if ((not ('@' in sentence)) or (len(sentence) < 1) or (('<' != sentence[0]) or ('>' != sentence[-1]))): raise Exception()
+  sentence = sentence.replace('RCPT TO: ', '', 1)
 
-    sentence = sentence.replace('<', '').replace('>', '')
-    email = sentence.split('@')
-    # email[0] = nome / email[1] = dominio
-
-    if (email[1] != 'redes.uff'): 
-      connectionSocket.send("550 Address unknown".encode('UTF-8'))
-      return False
-
-    # Checando se o usuário existe (verifica existência da caixa de entrada)
-    if(os.path.isfile(email[0] + '.txt')):
-      if (email[0] in rcpt):
-        print('E-mail já presente na lista de destinatários.')
-      else: 
-        rcpt.append(email[0])
-
-      message = '250 ' + email[0] + '@redes.uff' + '... Recipient ok'
-      connectionSocket.send(message.encode('UTF-8'))
-      return rcpt
-
-    else:
-      connectionSocket.send("550 Address unknown".encode('UTF-8'))
-      return False
-
-  except Exception as e:
+  if ((not ('@' in sentence)) or (len(sentence) < 1) or (('<' != sentence[0]) or ('>' != sentence[-1]))):
     connectionSocket.send("501 Syntax error, invalid parameter".encode('UTF-8'))
     return False
 
-def data(connectionSocket, rcpt):
+  sentence = sentence.replace('<', '', 1).replace('>', '' , 1)
+  email = sentence.split('@')
+  # email[0] = nome / email[1] = dominio
+
+  if (email[1] != 'redes.uff' or len(email) != 2): 
+    connectionSocket.send("550 Address unknown".encode('UTF-8'))
+    return False
+
+  # Checando se o usuário existe (verifica existência da caixa de entrada)
+  if(os.path.isfile(email[0] + '.txt')):
+    if (email[0] in rcpt):
+      print('E-mail já presente na lista de destinatários.')
+    else: 
+      rcpt.append(email[0])
+
+    message = '250 ' + email[0] + '@redes.uff' + '... Recipient ok'
+    connectionSocket.send(message.encode('UTF-8'))
+    return rcpt
+
+  else:
+    connectionSocket.send("550 Address unknown".encode('UTF-8'))
+    return False
+
+def data(connectionSocket, rcpt, sentence):
+  if (sentence != 'DATA'):
+    print('DATA com parâmetros inválidos')
+    connectionSocket.send("501 Syntax error, invalid parameter".encode('UTF-8'))
+    return False
+
   if (len(rcpt) < 1):
     print('DATA recebido sem destinatários definidos.')
     connectionSocket.send("503 Bad sequence error, command used in the wrong order".encode('UTF-8'))

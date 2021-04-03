@@ -1,7 +1,7 @@
 from socket import *
 
 serverName = 'localhost'
-serverPort = 25
+serverPort = 26
 
 # Criacao do socket
 clientSocket = socket(AF_INET, SOCK_STREAM)
@@ -26,7 +26,7 @@ if (sentence != ''):
 estado = 0
 
 while (True):
-  if (estado == 0 and sentence.replace(' ', '') == 'QUIT'):
+  if (estado == 0 and response.decode('UTF-8')[0:3] == '221'):
     break
 
   sentence = input('C: ')
@@ -41,7 +41,7 @@ while (True):
       response = clientSocket.recv(1024)
       print('S:', response.decode('UTF-8'))
 
-    if (sentence == 'DATA' and response.decode('UTF-8')[0:3] == '354'): 
+    if (response.decode('UTF-8')[0:3] == '354'): 
       estado = 1
 
   elif (estado == 1):
